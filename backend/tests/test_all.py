@@ -11,6 +11,7 @@ FastAPI app (including lifespan: thread pool, rate limiter, TCP collab server).
 import json
 import os
 import socket
+import subprocess
 import tempfile
 import time
 
@@ -167,16 +168,16 @@ class TestEncryption:
 
 class TestGit:
     def setup_method(self):
-        import git as gitlib
         self.tmpdir = tempfile.mkdtemp()
-        self.repo = gitlib.Repo.init(self.tmpdir)
-        self.repo.config_writer().set_value("user", "name", "Test").release()
-        self.repo.config_writer().set_value("user", "email", "test@test.com").release()
+        # Set up a real git repo using subprocess (no GitPython)
+        subprocess.run(["git", "init", self.tmpdir], check=True, capture_output=True)
+        subprocess.run(["git", "-C", self.tmpdir, "config", "user.name",  "Test"],  check=True, capture_output=True)
+        subprocess.run(["git", "-C", self.tmpdir, "config", "user.email", "test@test.com"], check=True, capture_output=True)
         readme = os.path.join(self.tmpdir, "README.md")
         with open(readme, "w") as f:
             f.write("# Test")
-        self.repo.index.add(["README.md"])
-        self.repo.index.commit("Initial commit")
+        subprocess.run(["git", "-C", self.tmpdir, "add", "README.md"],          check=True, capture_output=True)
+        subprocess.run(["git", "-C", self.tmpdir, "commit", "-m", "Initial commit"], check=True, capture_output=True)
 
     def test_status(self, client):
         r = client.get(f"/api/git/status?repo={self.tmpdir}")
@@ -225,28 +226,6 @@ class TestGit:
         })
         assert r.status_code == 200
         assert r.json()["branch"] == "feature-test"
-
-
-# ── Collab HTTP metadata endpoints ────────────────────────────────────────────
-
-class TestCollabHTTP:
-    def test_create_session_returns_code(self, client):
-        r = client.post("/api/collab/session")
-        assert r.status_code == 200
-        data = r.json()
-        assert "code" in data
-        assert len(data["code"]) == 6
-
-    def test_get_session_info(self, client):
-        create = client.post("/api/collab/session")
-        code = create.json()["code"]
-        r = client.get(f"/api/collab/session/{code}")
-        assert r.status_code == 200
-        assert r.json()["code"] == code
-
-    def test_get_session_not_found(self, client):
-        r = client.get("/api/collab/session/ZZZZZZ")
-        assert r.status_code == 404
 
 
 # ── Collab TCP socket protocol ────────────────────────────────────────────────

@@ -6,7 +6,7 @@ A production-grade FastAPI server for the CodeLab Desktop IDE.
 Architecture
 ------------
   Async event loop (FastAPI/Uvicorn)
-    HTTP routes, WebSocket handlers, streaming responses
+    HTTP routes, streaming responses
 
   ThreadPoolExecutor  (app.state.thread_pool)
     All blocking I/O: git operations, file system, subprocess execution.
@@ -18,11 +18,14 @@ Architecture
   Settings  (app.state.settings)
     Immutable, typed config object read once from .env at startup.
 
-  CollabSessionManager  (app.state.session_manager)
-    In-memory collaboration session registry, shared across all WS connections.
+  TCPCollabServer  (port 8002)
+    Raw TCP socket server for real-time collaboration.
+    No WebSocket, no HTTP — pure TCP with newline-delimited JSON.
+
+  TCPStatusServer  (port 8001)
+    Raw TCP diagnostic server for PING/STATUS/SESSIONS commands.
 """
 
-import asyncio
 import logging
 import os
 import sys
@@ -138,49 +141,25 @@ class TokenBucketRateLimiter:
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
-async def _session_cleanup_loop(manager) -> None:
-    """
-    Background task: purge collaboration sessions that have no participants.
-    Runs every 5 minutes to reclaim memory from sessions whose host closed the
-    app without explicitly disconnecting.
-    """
-    while True:
-        await asyncio.sleep(300)
-        removed = manager.cleanup_empty()
-        if removed:
-            logger.info("Session cleanup: removed %d idle session(s)", removed)
-
-
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """Runs once at startup (before requests) and once at shutdown."""
-    from routers.collab import CollabSessionManager  # local import avoids circularity
-    from crypto import EncryptionService             # AES-256-GCM
-    from tcp_server import TCPStatusServer           # raw TCP diagnostics
-    from tcp_collab import TCPCollabServer           # raw TCP collaboration (port 8002)
+    from crypto import EncryptionService    # AES-256-GCM
+    from tcp_server import TCPStatusServer  # raw TCP diagnostics (port 8001)
+    from tcp_collab import TCPCollabServer  # raw TCP collaboration (port 8002)
 
     t0 = time.monotonic()
 
-    rate_limiter = TokenBucketRateLimiter(
-        rate=_SETTINGS.run_rate,
-        per=_SETTINGS.run_per,
-    )
-
-    # Attach shared resources to app.state so every router can reach them
-    # via request.app.state.<name> without importing module-level globals.
-    session_manager    = CollabSessionManager()
-    cleanup_task       = asyncio.create_task(_session_cleanup_loop(session_manager))
-    encryption         = EncryptionService.from_env()
-    tcp_server         = TCPStatusServer(port=_SETTINGS.tcp_port)
-    tcp_collab_server  = TCPCollabServer(host="127.0.0.1", port=8002)
+    rate_limiter      = TokenBucketRateLimiter(rate=_SETTINGS.run_rate, per=_SETTINGS.run_per)
+    encryption        = EncryptionService.from_env()
+    tcp_server        = TCPStatusServer(port=_SETTINGS.tcp_port)
+    tcp_collab_server = TCPCollabServer(host="127.0.0.1", port=8002)
 
     application.state.settings         = _SETTINGS
     application.state.thread_pool      = _THREAD_POOL
     application.state.run_rate_limiter = rate_limiter
-    application.state.session_manager  = session_manager
     application.state.encryption       = encryption
     application.state.start_time       = datetime.now(timezone.utc)
-    application.state.ws_connections   = 0
     application.state.tcp_collab       = tcp_collab_server
 
     # Start raw TCP status server (skip if tcp_port == 0)
@@ -209,11 +188,6 @@ async def lifespan(application: FastAPI):
 
     yield  # ← server is live
 
-    cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
     tcp_collab_server.stop()
     if _SETTINGS.tcp_port:
         tcp_server.stop()
@@ -319,12 +293,11 @@ async def _generic_exc(request: Request, exc: Exception) -> JSONResponse:
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 
-from routers import ai_assist, collab, files, git_ops, github_api  # noqa: E402
+from routers import ai_assist, files, git_ops, github_api  # noqa: E402
 
 app.include_router(files.router,      prefix="/api/files",  tags=["Files"])
 app.include_router(git_ops.router,    prefix="/api/git",    tags=["Git"])
 app.include_router(github_api.router, prefix="/api/github", tags=["GitHub"])
-app.include_router(collab.router,     prefix="/api/collab", tags=["Collaboration"])
 app.include_router(ai_assist.router,  prefix="/api/ai",     tags=["AI"])
 
 
@@ -361,7 +334,6 @@ async def health(request: Request) -> dict:
             "endpoint": "/api/files/run",
             "limit": f"{state.run_rate_limiter.rate} per {int(state.run_rate_limiter.per)}s",
         },
-        "websocket_connections": state.ws_connections,
         "config": state.settings.status_report(),
     }
 
