@@ -1,0 +1,60 @@
+{
+  "name": "codelab",
+  "version": "1.0.0",
+  "description": "CodeLab - A VS Code-like editor with GitHub integration and AI assistance",
+  "author": "CodeLab",
+  "main": "main.js",
+  "scripts": {
+    "start": "cross-env NODE_ENV=development electron .",
+    "build": "electron-builder --win --x64",
+    "build:portable": "electron-builder --win --x64 -c.win.target=portable"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.codelab.desktop",
+    "productName": "CodeLab",
+    "directories": {
+      "output": "dist",
+      "buildResources": "resources"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "!node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/build",
+        "to": "app",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "resources/codelab-server",
+        "to": "codelab-server",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CodeLab"
+    },
+    "portable": {
+      "artifactName": "CodeLab-Portable.exe"
+    }
+  }
+}
