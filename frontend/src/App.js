@@ -83,7 +83,7 @@ export default function App() {
   const handleRunOutput = useCallback((lines) => {
     setTerminalOpen(true);
     setActiveTerminalTab("output");
-    setTerminalLines(prev => [...prev, ...lines]);
+    setTerminalLines(lines);   // clear previous run output, show only this run
   }, []);
 
   // ── Collab helpers ────────────────────────────────────────────────────────────
@@ -119,17 +119,26 @@ export default function App() {
     }
 
     if (msg.type === "welcome") {
-      // Open all files the host already has open
+      // Load the host's open files into our file list so they're available,
+      // but do NOT force-switch — each participant picks their own active file.
       const fileState = msg.file_state || {};
-      for (const [path, content] of Object.entries(fileState)) {
-        const filename = path.replace(/\\/g, "/").split("/").pop();
+      const paths = Object.keys(fileState);
+      if (paths.length > 0) {
         setOpenFiles(prev => {
-          if (prev.find(f => f.path === path)) return prev.map(f => f.path === path ? { ...f, content } : f);
-          return [...prev, { name: filename, path, content, isDirty: false }];
+          let next = [...prev];
+          for (const [path, content] of Object.entries(fileState)) {
+            const filename = path.replace(/\\/g, "/").split("/").pop();
+            if (next.find(f => f.path === path)) {
+              next = next.map(f => f.path === path ? { ...f, content } : f);
+            } else {
+              next = [...next, { name: filename, path, content, isDirty: false }];
+            }
+          }
+          return next;
         });
-        setActiveFile(path);
+        // Only switch to a file if we have nothing open yet
+        setActiveFile(prev => prev || paths[0]);
       }
-      // Restore host's root path
       if (msg.root_path) setRootPath(msg.root_path);
     }
 
@@ -138,12 +147,15 @@ export default function App() {
     }
 
     if (msg.type === "open_file" && msg.path) {
+      // Another participant opened a file — add it to the shared file list
+      // so it's accessible, but do NOT switch our active tab.
       const filename = msg.path.replace(/\\/g, "/").split("/").pop();
       setOpenFiles(prev => {
-        if (prev.find(f => f.path === msg.path)) return prev.map(f => f.path === msg.path ? { ...f, content: msg.content || "" } : f);
+        if (prev.find(f => f.path === msg.path))
+          return prev.map(f => f.path === msg.path ? { ...f, content: msg.content || "" } : f);
         return [...prev, { name: filename, path: msg.path, content: msg.content || "", isDirty: false }];
       });
-      setActiveFile(msg.path);
+      // No setActiveFile — each person stays on their own file
     }
 
     if (msg.type === "edit" && msg.path) {

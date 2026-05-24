@@ -337,9 +337,11 @@ def _sync_export(
                 cmd, cwd=str(local), capture_output=True, text=True, env=env
             )
 
-        # Init if needed
+        # Init if needed — try modern -b flag first, fall back for older git
         if not (local / ".git").exists():
-            run(["git", "init", "-b", branch])
+            r = run(["git", "init", "-b", branch])
+            if r.returncode != 0:
+                run(["git", "init"])   # older git — default branch name doesn't matter here
 
         run(["git", "add", "."])
         # Commit only if there's something to commit
