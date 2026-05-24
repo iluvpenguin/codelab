@@ -2,7 +2,7 @@
 setlocal EnableDelayedExpansion
 
 echo ============================================
-echo  CodeIT Backend Builder
+echo  CodeLab Backend Builder
 echo ============================================
 
 :: ── Resolve paths safely (no %~dp0.. trailing-dot bug) ──
@@ -77,31 +77,34 @@ if !errorlevel! neq 0 (
 
 :: ── Build the executable ─────────────────────────────────
 echo.
-echo Building codeit-server.exe...
-!PYTHON_CMD! -m PyInstaller codeit-server.spec --clean --noconfirm
+echo Building codelab-server (--onedir)...
+!PYTHON_CMD! -m PyInstaller codelab-server.spec --clean --noconfirm
 if !errorlevel! neq 0 (
     echo ERROR: PyInstaller build failed
     exit /b 1
 )
 
-:: ── Copy to electron resources ───────────────────────────
+:: ── Copy folder to electron resources ────────────────────
 set ELECTRON_RESOURCES=%BACKEND_DIR%\..\electron-codeit\resources
 if exist "%ELECTRON_RESOURCES%" (
     echo.
-    echo Copying codeit-server.exe to electron resources...
-    copy /Y "%BACKEND_DIR%\dist\codeit-server.exe" "%ELECTRON_RESOURCES%\codeit-server.exe"
+    echo Copying codelab-server folder to electron resources...
+    if exist "%ELECTRON_RESOURCES%\codelab-server" (
+        rmdir /s /q "%ELECTRON_RESOURCES%\codelab-server"
+    )
+    xcopy /E /I /Q "%BACKEND_DIR%\dist\codelab-server" "%ELECTRON_RESOURCES%\codelab-server"
     if !errorlevel!==0 (
         echo Copied successfully.
     ) else (
-        echo WARNING: Copy failed - copy manually from dist\codeit-server.exe
+        echo WARNING: Copy failed - copy dist\codelab-server folder manually.
     )
 ) else (
-    echo NOTE: electron-codeit\resources not found - copy dist\codeit-server.exe manually.
+    echo NOTE: electron-codeit\resources not found - copy dist\codelab-server folder manually.
 )
 
 echo.
 echo ============================================
 echo  Backend build complete!
-echo  Output: %BACKEND_DIR%\dist\codeit-server.exe
+echo  Output: %BACKEND_DIR%\dist\codelab-server\
 echo ============================================
 endlocal

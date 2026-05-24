@@ -12,25 +12,22 @@ set ELECTRON=%ROOT%\electron-codeit
 :: Step 0: Kill any running instances
 echo.
 echo [0/4] Killing running instances...
-taskkill /F /IM codeit-server.exe 2>nul
+taskkill /F /IM codelab-server.exe 2>nul
 taskkill /F /IM CodeLab.exe 2>nul
 timeout /t 2 /nobreak >nul
 
-:: Step 1: Build Python backend
+:: Step 1: Build Python backend (--onedir so Firewall only asks once)
 echo.
 echo [1/4] Building backend...
 cd /d "%BACKEND%"
-py -3.11 -m pip install pyinstaller --quiet
-py -3.11 -m PyInstaller codeit-server.spec --clean --noconfirm
+call build-backend.bat
 if !errorlevel! neq 0 ( echo ERROR: Backend build failed & exit /b 1 )
-copy /Y "%BACKEND%\dist\codeit-server.exe" "%ELECTRON%\resources\codeit-server.exe"
-echo Backend built and copied.
 
 :: Step 2: Build React frontend
 echo.
 echo [2/4] Building frontend...
 cd /d "%FRONTEND%"
-call yarn build
+call npm run build
 if !errorlevel! neq 0 ( echo ERROR: Frontend build failed & exit /b 1 )
 echo Frontend built.
 
