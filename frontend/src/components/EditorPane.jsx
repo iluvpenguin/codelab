@@ -211,10 +211,15 @@ export default function EditorPane({
       return;
     }
     setRunning(true);
-    onRunOutput && onRunOutput([
+    // Show the header immediately so the terminal switches to the output tab.
+    // We accumulate all lines and do a single final replacement so the terminal
+    // never ends up showing only the footer separator (which would be filtered
+    // out by Terminal, leaving "No output yet").
+    const collected = [
       { type:"system", text:`▶ ${debug ? "Debug" : "Run"}: ${runTarget.name}` },
       { type:"system", text:"─".repeat(44) },
-    ]);
+    ];
+    onRunOutput && onRunOutput([...collected]);   // switch to output tab + show header
     try {
       const cwd = runTarget.path.split(/[\\/]/).slice(0,-1).join("\\");
       const res  = await fetch(`${BACKEND_URL()}/api/files/run`, {
@@ -226,12 +231,13 @@ export default function EditorPane({
         type: line.startsWith("[stderr]") || line.startsWith("[Error]") || line.startsWith("[Exit code:") ? "error" : "output",
         text: line,
       })).filter(l => l.text.trim() !== "");
-      onRunOutput && onRunOutput(lines);
+      collected.push(...lines);
     } catch (e) {
-      onRunOutput && onRunOutput([{ type:"error", text:`Error: ${e.message}` }]);
+      collected.push({ type:"error", text:`Error: ${e.message}` });
     } finally {
       setRunning(false);
-      onRunOutput && onRunOutput([{ type:"system", text:"─".repeat(44) }]);
+      collected.push({ type:"system", text:"─".repeat(44) });
+      onRunOutput && onRunOutput(collected);      // replace with full output (header + body + footer)
     }
   }, [runTarget, onRunOutput]);
 

@@ -62,7 +62,7 @@ export default function TreeItems({ nodes, expanded, onToggle, onOpenFile, activ
           <div
             key={node.path}
             data-testid={`tree-node-${node.name}`}
-            onClick={() => isDir ? onToggle(node.path) : onOpenFile({ path: node.path, name: node.name, content: "" })}
+            onClick={() => isDir ? onToggle(node.path) : onOpenFile({ path: node.path, name: node.name })}
             style={{
               display: "flex", alignItems: "center", gap: "4px",
               paddingLeft: `${indent}px`, paddingRight: "8px",
