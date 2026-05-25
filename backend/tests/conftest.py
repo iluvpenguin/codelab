@@ -1,13 +1,16 @@
 """
 pytest configuration / shared fixtures.
 """
+import base64
 import os
 import sys
 
 # ── Environment must be set BEFORE server is imported ─────────────────────────
-# Use a fresh ENCRYPTION_KEY (generated: python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())")
+# ANTHROPIC_API_KEY: dummy value — AI endpoints are not exercised by the test suite.
 os.environ.setdefault("ANTHROPIC_API_KEY",  "test-key-not-real")
-os.environ.setdefault("ENCRYPTION_KEY",     base64.b64encode(os.urandom(32)).decode())
+# ENCRYPTION_KEY: generate a fresh random key per test run so no real key
+# ever needs to be hard-coded here or committed to version control.
+os.environ.setdefault("ENCRYPTION_KEY", base64.b64encode(os.urandom(32)).decode())
 os.environ.setdefault("TCP_PORT",           "0")   # Disable diagnostic TCP server during tests
 os.environ.setdefault("CORS_ORIGINS",       "*")
 os.environ.setdefault("RUN_RATE",           "100")
